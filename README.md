@@ -67,7 +67,8 @@ tools/
   MAPPING.json                 ← 逐张量映射规格（权威）
   verify/                      ← 4 个装配/解包验证脚本 + 旋转/GEMM oracle
 patches/
-  ninfer-ternary.patch         ← 引擎侧源码改动（新格式 + 旋转内核 + 家族接线 + mma 快路径）
+  changed-files/               ← 引擎侧源码改动（与上游 fork 同结构，覆盖即可）
+  README-改动说明.md            ← 改动清单 + 重建 + 必须做的验证
 ```
 
 ---
