@@ -1,48 +1,104 @@
 ---
 license: Apache License 2.0
-tags: []
-
-#model-type:
-##如 gpt、phi、llama、chatglm、baichuan 等
-#- gpt
-
-#domain:
-##如 nlp、cv、audio、multi-modal
-#- nlp
-
-#language:
-##语言代码列表 https://help.aliyun.com/document_detail/215387.html?spm=a2c4g.11186623.0.0.9f8d7467kni6Aa
-#- cn 
-
-#metrics:
-##如 CIDEr、Blue、ROUGE 等
-#- CIDEr
-
-#tags:
-##各种自定义，包括 pretrained、fine-tuned、instruction-tuned、RL-tuned 等训练方法和其他
-#- pretrained
-
-#tools:
-##如 vllm、fastchat、llamacpp、AdaSeq 等
-#- vllm
+tasks:
+- text-generation
+frameworks:
+- pytorch
+libraries:
+- ninfer
+- gguf
+language:
+- zh
+- en
+tags:
+- ninfer
+- ternary
+- 1.58-bit
+- bonsai
+- ada
+- sm-89
+- rtx-4080-super
+- windows
+- quantization
+- hadamard
+base_model: Qwen/Qwen3.8-27B
+new_version: ''
+datasets: []
+metrics: []
 ---
-### 当前模型的贡献者未提供更加详细的模型介绍。模型文件和权重，可浏览“模型文件”页面获取。
-#### 您可以通过如下git clone命令，或者ModelScope SDK来下载模型
 
-SDK下载
-```bash
-#安装ModelScope
-pip install modelscope
+# NInfer on Ada · 三元 Bonsai 2 27B 实战移植（RTX 4080 SUPER / Windows）
+
+> 把 **NInfer** 推理引擎接到 **消费级 Ada 卡（RTX 4080 SUPER, sm_89, Windows）**，
+> 并把 **Ternary Bonsai 2 27B**（1.58-bit 三元 + Hadamard 旋转基）移植进 NInfer 原生 `.ninfer`。
+> 本仓是**技术成品展示 + 可复现文档 + 工具链**，不是一份权重分发。
+
+---
+
+## TL;DR
+
+| 项 | 结果 |
+|---|---|
+| **端到端正确性** | ✅ 输出通顺；**PPL 6.445**（黄金参照 6.8196 ± 0.5365，同量级且略优） |
+| **单流速度（MTP K=2）** | ✅ **96.7 – 130.8 t/s**（4/5 真实负载 ≥ 101 t/s） |
+| 纯解码（T=1） | 62 – 64 t/s |
+| 预填充（prefill） | 356 – 439 tok/s |
+| 制品尺寸 | **7.74 GB**（文本部分 6.696 GiB，落在 5.5–7.2 GiB 红线内） |
+| 20 题社区基准（MMLU/MMLU-Pro/ZebraLogic/AIME/HumanEval） | **16/20 = 80%**（同引擎全精度 27B 为 18/20） |
+
+**它做了什么**：给 NInfer 加了一种它原本没有的权重格式（三元 + 运行时 Hadamard 旋转），
+并让整条链在本机 32 GB 的 Ada 卡上跑通、达标。**全社区此前没有第二家**把三元接进 NInfer。
+
+---
+
+## 本仓包含什么
+
 ```
-```python
-#SDK模型下载
-from modelscope import snapshot_download
-model_dir = snapshot_download('shensanshu/ninfer-ada-ternary')
-```
-Git下载
-```
-#Git模型下载
-git clone https://www.modelscope.cn/shensanshu/ninfer-ada-ternary.git
+README.md                      ← 本文（模型卡片）
+NOTICE.md                      ← 第三方来源与许可声明
+LICENSE                        ← Apache License 2.0
+docs/
+  01-4080S-接入-NInfer.md       ← 让 NInfer 在 Ada/Windows 上跑起来
+  02-微调模型转-NInfer.md       ← 把普通（微调）模型转成 .ninfer
+  03-三元模型转-NInfer.md       ← 把三元模型移植进 NInfer（本项目主线）
+  04-工程实录-坑与方法学.md      ← 踩过的坑与验证方法学（最值钱的部分）
+tools/
+  pack.py                      ← GGUF → .ninfer 三元打包器
+  MAPPING.json                 ← 逐张量映射规格（权威）
+  verify/                      ← 4 个装配/解包验证脚本 + 旋转/GEMM oracle
+patches/
+  ninfer-ternary.patch         ← 引擎侧源码改动（新格式 + 旋转内核 + 家族接线 + mma 快路径）
 ```
 
-<p style="color: lightgrey;">如果您是本模型的贡献者，我们邀请您根据<a href="https://modelscope.cn/docs/ModelScope%E6%A8%A1%E5%9E%8B%E6%8E%A5%E5%85%A5%E6%B5%81%E7%A8%8B%E6%A6%82%E8%A7%88" style="color: lightgrey; text-decoration: underline;">模型贡献文档</a>，及时完善模型卡片内容。</p>
+---
+
+## 三份技术文档（核心交付）
+
+### ① [4080S 接入 NInfer](docs/01-4080S-接入-NInfer.md)
+消费级 Ada（sm_89）+ Windows 上把 NInfer 编出来、跑起来：环境、构建、运行、档位、坑。
+
+### ② [微调模型 → .ninfer](docs/02-微调模型转-NInfer.md)
+把任意**受支持架构**的 HF safetensors 微调模型转成 NInfer 原生 `.ninfer`（用引擎自带的
+`tools/convert/` 配方框架）。**零引擎改动**。
+
+### ③ [三元模型 → .ninfer](docs/03-三元模型转-NInfer.md)
+把**三元 + Hadamard 旋转基**的模型移植进 NInfer：新增格式、旋转内核、fused 家族接线、
+GEMV/mma 两条快路径、打包器。**本项目的主体工作**。
+
+---
+
+## 数据从哪来（诚实交代）
+
+- 速度/正确性数字全部来自**引擎自报 timings + PPL 实测**，不是估算；
+- 每一步判据都写在对应文档里（"正确应看到什么、错误会看到什么"）；
+- 关键结论都带**负控**与**独立旁证**（详见 ④）。
+
+---
+
+## 许可与来源
+
+本项目为 **NInfer（Apache-2.0）** 的派生作品，并消费 **PrismML 的 Ternary Bonsai 2 27B** 权重。
+详见 [NOTICE.md](NOTICE.md)。
+
+- 引擎与工具：Apache License 2.0
+- 权重（不在本仓分发）：来自 PrismML / Qwen 体系，遵循其各自许可
