@@ -23,8 +23,10 @@ namespace ninfer::ops::detail {
 // (128) threads, so thread `index` owns weight `index` inside every 128-weight group:
 // a group is decoded once by the whole CTA and reused across the whole token tile, which
 // is what keeps this from being 128x redundant. This is the "dequantize the block and
-// accumulate in F32" shape that upstream's reference kernel uses; a repack/SIMT fast path
-// and an MMA path are deliberately left out until the numerics are pinned down.
+// accumulate in F32" shape that upstream's reference kernel uses; a repack/SIMT fast path is
+// still deliberately left out. The MMA path for the small-T regime (T = 2..8) -- which also
+// carries prefill, at ceil(T/8) weight passes -- now ships as ternary_rowsplit_mma_small_t.cuh
+// and is selected inside launch_ternary_gemm_t8 (roll back with NINFER_TERNARY_MMA=0).
 //
 // Activation layout is [K, T] with ne[0] = K CONTIGUOUS, i.e. the ninfer/ggml convention: element
 // (column, token) lives at token * k + column. Output is [N, T] the same way: (row, token) at

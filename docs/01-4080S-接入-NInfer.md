@@ -36,10 +36,32 @@ NInfer 官方**只支持 Linux + RTX 5090（sm_120a）**，其 CMake **显式拒
 
 ## 2. 获取源码
 
-两条线：
+**本项目的基线（照这个来，别猜）：**
 
-- **上游主线**（Linux / 5090 / `sm_120a`）：`github.com/Neroued/ninfer`
-- **Ada / Windows 线**（本项目所用）：早期 Windows 版本 + 本项目的三元改动（见 `patches/`）
+| | |
+|---|---|
+| 上游总仓 | `github.com/Neroued/ninfer`（Linux / 5090 / `sm_120a`）—— **不是**本项目用的那条 |
+| **本项目的基座树** | **`Ambolio/ninfer-4090-windows`，`v1.0.8` 线**（Ada / Windows / sm_89）｜记录中的 commit：**`6eb70a07`** |
+| 本项目的改动 | 本仓 `patches/changed-files/`（**同结构覆盖**到基座树根目录） |
+
+```bat
+git clone https://github.com/Ambolio/ninfer-4090-windows.git ninfer-4090-windows
+cd ninfer-4090-windows
+git checkout 6eb70a07                            :: v1.0.8 线；本补丁针对它写成
+xcopy /E /Y <本仓>\patches\changed-files\* .      :: 覆盖（src/ops/linear/ternary/ 是新增目录）
+```
+
+> 取不到 `6eb70a07` 时：取 **v1.0.8 线上的那个 commit**（等价 tag/最新 v1.0.8 提交）即可。
+> 本补丁是**按文件路径覆盖**的，只要基座树的目录结构一致就能用。
+
+**判据（怎么确认你贴对了）**：
+
+1. `git status` **只**显示 `patches/changed-files/` 里那些文件的改动，不出现无关文件；
+2. 覆盖后会多出目录 **`src/ops/linear/ternary/`**（**基座树原本没有它** —— 三元相关的 13 个文件全是新增）；
+3. 构建按 §3 / §4 走，判据 = **`BUILD OK`**（0 错误）。
+
+> ⚠️ **不要用其它线**：`v1.2.0` 线（`ninfer-4090-1.2.0-rtx4090` 等）的目录结构与格式注册表都不同，
+> 本补丁**不是**针对它写的；5090 / Linux 的 fork 同样不适用。
 
 目录约定（下文用变量表示，按你的实际盘符替换）：
 

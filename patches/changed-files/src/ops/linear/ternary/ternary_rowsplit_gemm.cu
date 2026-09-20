@@ -7,6 +7,7 @@
 #include "ops/common/math.h"
 #include "ops/linear/ternary/ternary_launch.h"
 #include "ops/linear/ternary/ternary_rowsplit_gemv.cuh"
+#include "ops/linear/ternary/ternary_rowsplit_mma_small_t.cuh"
 
 #include <cstdint>
 #include <stdexcept>
@@ -116,12 +117,50 @@ void launch_ternary_gemm_t1(const Tensor& x, const Weight& w, Tensor& out,
     launch_by_qtype<1>(x, w, out, out_row_stride, stream);
 }
 
+// ---------------------------------------------------------------------------
+// Ternary PQ2_0 tensor-core path for the small-T regime (T = 2..8), implemented in
+// ternary_rowsplit_mma_small_t.cuh. This is the batch fast path.
+//
+// The SIMT tile GEMV above reuses each weight across its tile but still pays one FMA per weight
+// PER TOKEN, so its cost grows with T while its weight traffic does not: measured on a 322 MB
+// PQ2_0 payload it takes 0.706 ms at T = 1 and 1.533 ms at T = 3, i.e. 2.2x the time for
+// byte-identical traffic (211 GiB/s against 483 GiB/s). One mma.m16n8k16 carries 16 rows x 8
+// tokens x 16 k, so every token in the tile rides the same weight read at no extra instruction
+// cost.
+//
+// T >= 2 only: the T = 1 endpoint of that same measurement (0.603 against 0.706 ms) did NOT
+// transfer to the real engine -- see the note on launch_ternary_gemm_t1 -- so decode stays on
+// the GEMV. Selected inside launch_ternary_gemm_t8; roll back with NINFER_TERNARY_MMA=0.
+// ---------------------------------------------------------------------------
+bool mma_admits(const Weight& w, std::int32_t out_row_stride) {
+    return w.qtype == QType::PQ2_0_G128 && w.qhigh == nullptr && w.padded_shape[1] == w.k &&
+           (w.k % kTernaryMmaChunkK) == 0 && out_row_stride >= w.n;
+}
+
+void launch_pq2_mma_small_t(const Tensor& x, const Weight& w, Tensor& out,
+                            std::int32_t out_row_stride, std::int32_t tokens,
+                            cudaStream_t stream) {
+    // The staging is static shared memory (a compile-time 32 KB), so there is no dynamic size to
+    // pass and no cudaFuncSetAttribute opt-in to make -- which is also what keeps it legal inside
+    // the captured CUDA graphs this op runs in.
+    const unsigned grid = static_cast<unsigned>(div_up(w.n, kTernaryMmaRowsPerCta));
+    ternary_pq2_mma_small_t_kernel<<<grid, kTernaryMmaThreads, 0, stream>>>(
+        static_cast<const __nv_bfloat16*>(x.data), static_cast<const std::uint8_t*>(w.qdata),
+        static_cast<const std::uint8_t*>(w.scales), static_cast<__nv_bfloat16*>(out.data), w.n,
+        w.k, tokens, out_row_stride);
+    CUDA_CHECK(cudaGetLastError());
+}
+
 void launch_ternary_gemm_t8(const Tensor& x, const Weight& w, Tensor& out,
                             std::int32_t out_row_stride, cudaStream_t stream) {
-    // The speculative verify pass runs T = draft + 1 (2..4 here). The reference tiled kernel wastes
-    // five of its eight token slots at that size and needs a 128-thread CTA plus seven barriers per
-    // output row, which cost more than the whole decode step it was verifying. The small-tile GEMV
-    // reads each weight once for all four tokens instead.
+    // The speculative verify pass runs T = draft + 1 (2..4 here). Prefill arrives with T >= 128
+    // and is carried by the same kernel, at ceil(T/8) weight passes. The reference tiled kernel
+    // wastes five of its eight token slots at verify size and needs a 128-thread CTA plus seven
+    // barriers per output row, which cost more than the whole decode step it was verifying.
+    if (ternary_mma_enabled() && mma_admits(w, out_row_stride) && x.ne[1] >= 2) {
+        launch_pq2_mma_small_t(x, w, out, out_row_stride, x.ne[1], stream);
+        return;
+    }
     if (gemv_admits(x, w, 4)) {
         launch_pq2_gemv_tile(x, w, out, out_row_stride, x.ne[1], stream);
         return;
