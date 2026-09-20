@@ -1,3 +1,6 @@
+# MODIFIED for the NInfer ternary port (Ternary Bonsai 2 27B on NInfer / Ada sm_89).
+# This file differs from upstream NInfer; see patches/ in the release bundle
+# for the change list, rebuild steps and required verification.
 function(ninfer_internal_includes target)
   target_include_directories(${target} PRIVATE
     ${PROJECT_SOURCE_DIR}/include

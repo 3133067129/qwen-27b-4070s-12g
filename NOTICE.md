@@ -9,7 +9,9 @@
 - **上游**：`Neroued/ninfer` —— **Apache License 2.0**
 - 本仓的引擎侧改动（`patches/`）与打包/验证工具（`tools/`）为在上述作品基础上的修改，
   同样以 **Apache License 2.0** 发布，并保留原始版权与许可声明。
-- 依据 Apache-2.0 §4，**已标明修改**：本仓相对上游新增/修改的文件见 `patches/ninfer-ternary.patch`。
+- 依据 Apache-2.0 §4，**已标明修改**：本仓相对上游 NInfer **新增/修改的文件**以**逐文件对照形式**放在
+  `patches/changed-files/`（与上游同目录结构，覆盖即可），改动清单、重建步骤与必做验证见
+  `patches/README-改动说明.md`；每个改动文件顶部也带 `MODIFIED for the NInfer ternary port` 声明行。
 
 ## 2. 模型权重（**本仓不分发**）
 

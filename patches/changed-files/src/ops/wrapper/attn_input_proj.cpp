@@ -1,3 +1,6 @@
+// MODIFIED for the NInfer ternary port (Ternary Bonsai 2 27B on NInfer / Ada sm_89).
+// This file differs from upstream NInfer; see patches/ in the release bundle
+// for the change list, rebuild steps and required verification.
 #include "ninfer/ops/attn_input_proj.h"
 
 #include "ops/attn_input_proj/bf16/bf16_attn_input_plan.h"
