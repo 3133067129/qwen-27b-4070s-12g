@@ -44,7 +44,7 @@ metrics: []
 | 纯解码（T=1） | 62 – 64 t/s |
 | 预填充（prefill） | 356 – 439 tok/s |
 | 制品尺寸 | **7.74 GB**（文本部分 6.696 GiB，落在 5.5–7.2 GiB 红线内） |
-| 20 题社区基准（MMLU/MMLU-Pro/ZebraLogic/AIME/HumanEval） | **16/20 = 80%**（同引擎全精度 27B 为 18/20） |
+| 20 题社区基准（MMLU/MMLU-Pro/ZebraLogic/AIME/HumanEval） | **19/20 = 95%**（同引擎全精度 27B 亦为 19/20，**打平**） |
 
 **它做了什么**：给 NInfer 加了一种它原本没有的权重格式（三元 + 运行时 Hadamard 旋转），
 把 **MTP 头拼进三元 artifact**（否则够不到 KPI），并让整条链在本机 32 GB 的 Ada 卡上跑通、达标。
