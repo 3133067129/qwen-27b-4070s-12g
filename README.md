@@ -101,12 +101,67 @@ docs/
   03-三元模型转-NInfer.md       ← 把三元模型移植进 NInfer（本项目主线）
   04-工程实录-坑与方法学.md      ← 踩过的坑与验证方法学（最值钱的部分）
 tools/
-  pack.py                      ← GGUF → .ninfer 三元打包器
+  pack.py                      ← GGUF → .ninfer 三元打包器（⚠️ 模板必须 groupwise-int，见「常见问题」）
   MAPPING.json                 ← 逐张量映射规格（权威）
   verify/                      ← 4 个装配/解包验证脚本 + 旋转/GEMM oracle
 patches/
   changed-files/               ← 引擎侧源码改动（与上游 fork 同结构，覆盖即可）
   README-改动说明.md            ← 改动清单 + 重建 + 必须做的验证
+```
+
+---
+
+## ⚠️ 常见问题：`pack.py` 报 `unmapped gdn object ...`（模板 schema 不对）
+
+**症状**：跑 `pack.py build` 时中止于
+
+```
+unmapped gdn object gdn/a_b_projection
+```
+
+**原因（一句话）**：`pack.py` 需要的"模板"必须是 **`groupwise-int`** 那一版 qwen3.8-27b 制品。
+模型家族同时存在 **`nvfp4`** 那一版，而它的 GDN/attention 投影是**融合命名**，不在 `pack.py` 的映射表里。
+
+**关键：模板不是"只借 vision/MTP 载荷"，它是骨架/清单。**
+`pack.py` 会**遍历模板自己的对象名表**逐个映射（表外的 `vision/*`、`mtp/*`、`frontend/*` 才走 `borrow`），
+所以 schema 必须逐字一致，融合命名一进来就必然 `unmapped` 中止。
+
+**两个 schema 的差别（判据）**
+
+| | **`groupwise-int`（要这个）** | `nvfp4`（用不了） |
+|---|---|---|
+| `identity.weights_id` | **`groupwise-int`** | `nvfp4` |
+| `text/layers/3/` | `attention/query_key` ＋ `attention/gate_value`（**两个**） | 单个 `attention/query_key_gate_value` |
+| GDN 投影 | `gdn/a_projection` ＋ `gdn/b_projection`（分开） | `gdn/a_b_projection`（融合） |
+| GDN qkv/z | `gdn/query_key` ＋ `gdn/value_z`（分开） | `gdn/query_key_value_z`（融合） |
+
+**怎么拿到正确的模板：用基树自带的转换器自己产**（本仓不发权重，也**不必向作者要 20 GB**）。
+
+`patches/` 是叠在引擎基树上的改动，而**基树自带两个转换器**，schema 由"跑哪一个"决定：
+
+```bash
+# ✅ 产 groupwise-int（pack.py 要的这份）
+python3 -m tools.convert.qwen3_8_27b.convert \
+  --model /path/to/Qwen3.8-27B \
+  --dflash2-model /path/to/Qwen3.8-27B-DFlash2 \
+  --out out/qwen3_8_27b.ninfer
+
+# ❌ 不要用这个：它产 nvfp4，schema 不匹配，pack.py 会拒
+#    python3 -m tools.convert.qwen3_8_27b.convert_nvfp4 ...
+```
+
+**自检（满足任一条即为正确）**
+1. 该制品 `identity.weights_id == "groupwise-int"`
+2. `text/layers/3/` 下是 `attention/query_key` 与 `attention/gate_value` **两个**对象
+
+**从 2026-09-21 起 `pack.py` 会提前拦住并告诉你怎么做**：打开模板时先校验 `weights_id`，
+不匹配就直接报出上面这张对照表与转换命令，而不再等到 200 行后抛一个没有处置建议的 `unmapped ...`。
+两个路径都可以用参数覆盖，**不必再手改源码里的常量**：
+
+```bash
+python3 tools/pack.py check       --gguf <Bonsai.gguf> --template <groupwise-int.ninfer>
+python3 tools/pack.py build <out.ninfer> --gguf <Bonsai.gguf> --template <groupwise-int.ninfer>
+# 等价的环境变量：NINFER_TERNARY_GGUF / NINFER_TERNARY_TEMPLATE
 ```
 
 ---

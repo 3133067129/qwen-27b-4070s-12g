@@ -21,11 +21,21 @@ Modes
   layer3 <out>     minimal artifact: frontend + sign table + one full-attention layer
   build  <out>     full text model
 
+Paths (both may be overridden; the constants in this file are only defaults)
+  --gguf     <p>   the Bonsai 2 27B PQ2_0 GGUF          (env NINFER_TERNARY_GGUF)
+  --template <p>   a **groupwise-int** qwen3.8-27b artifact
+                   (env NINFER_TERNARY_TEMPLATE)       -- see README FAQ
+  The template is the skeleton/manifest this packer walks, not just a donor of the
+  vision/MTP payloads: its object NAMES must match the mapping table, so the `nvfp4`
+  packing (fused gdn/a_b_projection, gdn/query_key_value_z, attention/query_key_gate_value)
+  is rejected up front with instructions on how to produce the right one.
+
 Interpreter: <PYTHON>\\python.exe
 """
 from __future__ import annotations
 
 import json
+import os
 import struct
 import sys
 from collections import Counter
@@ -49,6 +59,44 @@ from tools.artifact import (  # noqa: E402
 
 TEMPLATE = r"E:\ninfer\models\qwen3_8_27b_abliterated.ninfer"
 GGUF = r"<WORKSPACE>\Ternary-Bonsai-2-27B-PQ2_0.gguf"
+
+# The template must be the **groupwise-int** packing.  It is not merely a donor of the
+# vision/MTP payloads: this packer walks the template's OWN object list and maps every name
+# through a closed table, so a template with different (fused) names cannot be consumed.
+# The sibling packing `nvfp4` fuses the projections (gdn/a_b_projection,
+# gdn/query_key_value_z, attention/query_key_gate_value) and therefore aborts with
+# "unmapped gdn object ...".  Both packings are produced from the same model by different
+# converters in tools/convert/qwen3_8_27b/.
+TEMPLATE_SCHEMA = "groupwise-int"
+
+_TEMPLATE_HELP = """\
+模板 schema 不对：pack.py 需要 **groupwise-int** 的 qwen3.8-27b 制品。
+(the template must be the groupwise-int packing, not nvfp4)
+
+  你给的模板  : {path}
+  它的 schema : weights_id={got!r}
+  需要的      : weights_id={want!r}
+
+怎么拿到正确的模板（二选一）：
+  A) 用基树自带的转换器自己产一份 —— groupwise-int 路径，**不是** convert_nvfp4：
+       python3 -m tools.convert.qwen3_8_27b.convert \\
+         --model <Qwen3.8-27B 权重目录> \\
+         --dflash2-model <Qwen3.8-27B-DFlash2 目录> \\
+         --out <out.ninfer>
+     （convert_nvfp4 产出 nvfp4 schema，其 GDN/attention 为**融合命名**：
+       text/layers/N/gdn/a_b_projection、gdn/query_key_value_z、attention/query_key_gate_value
+       —— 这些名字不在本脚本的映射表里，必然中止。）
+  B) 任何 weights_id=groupwise-int 的 qwen3.8-27b 制品都可以当模板。
+
+自检（满足任一条即为正确）：
+  1) 该制品 identity.weights_id == 'groupwise-int'
+  2) text/layers/3/ 下是 attention/query_key 与 attention/gate_value **两个**对象
+     （若只有单个 attention/query_key_gate_value ⇒ nvfp4 版，用不了）
+"""
+
+_SCHEMA_HINT = ("\n  hint: 模板 schema 不匹配。本脚本只认 weights_id=groupwise-int 的模板；"
+                "nvfp4 模板的融合命名（gdn/a_b_projection、gdn/query_key_value_z、"
+                "attention/query_key_gate_value）不在映射表里。见 README FAQ / --template。")
 
 T_PQ2_0, T_PTQ1_0, T_F32, T_BF16 = 142, 143, 0, 30
 FMT = {T_PQ2_0: "PQ2_0_G128", T_PTQ1_0: "PTQ1_0_G128"}
@@ -326,12 +374,28 @@ def i32_payload(a) -> bytes:
 # ---------------------------------------------------------------------------
 # Inventory (built from the template, never assumed)
 # ---------------------------------------------------------------------------
+def _weights_id(identity):
+    """Pull weights_id out of the template manifest's identity block."""
+    if isinstance(identity, dict):
+        for k in ("weights_id", "weightsId", "weights"):
+            v = identity.get(k)
+            if isinstance(v, str):
+                return v
+    return None
+
+
 def load_template():
     with open(TEMPLATE, "rb") as f:
         f.seek(16)
         blob = f.read(8 << 20)
     obj, _ = json.JSONDecoder().raw_decode(blob.decode("utf-8", "replace"))
-    return obj["identity"], obj["objects"]
+    identity, objects = obj["identity"], obj["objects"]
+    got = _weights_id(identity)
+    if got != TEMPLATE_SCHEMA:
+        # Fail HERE, with an actionable message, instead of 200 lines later on an
+        # "unmapped gdn object" that does not say what to do about it.
+        raise SystemExit(_TEMPLATE_HELP.format(path=TEMPLATE, got=got, want=TEMPLATE_SCHEMA))
+    return identity, objects
 
 
 def layer_kind(objs) -> dict[int, str]:
@@ -546,7 +610,7 @@ class Packer:
                     return bf16_payload(read_direct(g, pre + "attn_q_norm.weight") - 1.0)
                 if sub == "key_norm":
                     return bf16_payload(read_direct(g, pre + "attn_k_norm.weight") - 1.0)
-                raise SystemExit(f"unmapped attention object {name}")
+                raise SystemExit(f"unmapped attention object {name}" + _SCHEMA_HINT)
 
             if suffix.startswith("gdn/"):
                 sub = suffix.split("/", 1)[1]
@@ -571,9 +635,9 @@ class Packer:
                                                          .astype(np.float32)))
                 if sub == "dt_bias":
                     return fp32_payload(tiled_to_grouped(read_direct(g, pre + "ssm_dt.bias")))
-                raise SystemExit(f"unmapped gdn object {name}")
+                raise SystemExit(f"unmapped gdn object {name}" + _SCHEMA_HINT)
 
-            raise SystemExit(f"unmapped layer object {name}")
+            raise SystemExit(f"unmapped layer object {name}" + _SCHEMA_HINT)
 
         return None   # borrow
 
@@ -843,11 +907,42 @@ def mode_build(g: Gguf, out: str, only_layer: int | None = None) -> int:
     return 0
 
 
+def _pop_opt(args, name):
+    """Remove `--name VALUE` / `--name=VALUE` from args; return (value|None, rest)."""
+    rest, val, i = [], None, 0
+    while i < len(args):
+        a = args[i]
+        if a == name and i + 1 < len(args):
+            val, i = args[i + 1], i + 2
+        elif a.startswith(name + "="):
+            val, i = a.split("=", 1)[1], i + 1
+        else:
+            rest.append(a)
+            i += 1
+    return val, rest
+
+
 def main() -> int:
+    global TEMPLATE, GGUF
     args = sys.argv[1:]
+    tpl_opt, args = _pop_opt(args, "--template")
+    gguf_opt, args = _pop_opt(args, "--gguf")
+    TEMPLATE = tpl_opt or os.environ.get("NINFER_TERNARY_TEMPLATE") or TEMPLATE
+    GGUF = gguf_opt or os.environ.get("NINFER_TERNARY_GGUF") or GGUF
     if not args:
         print(__doc__)
         return 2
+    if not Path(TEMPLATE).exists():
+        raise SystemExit(
+            f"模板不存在: {TEMPLATE}\n"
+            f"  用 --template <path> 或环境变量 NINFER_TERNARY_TEMPLATE 指定。\n"
+            f"  模板必须与目标制品同 schema：weights_id={TEMPLATE_SCHEMA}"
+            f"（不是 nvfp4，见 README FAQ）。")
+    if not Path(GGUF).exists():
+        raise SystemExit(
+            f"GGUF 不存在: {GGUF}\n"
+            f"  用 --gguf <path> 或环境变量 NINFER_TERNARY_GGUF 指定。\n"
+            f"  源码里的默认值是占位符 <WORKSPACE>，必须覆盖。")
     g = Gguf(GGUF)
     if args[0] == "check":
         return mode_check(g)

@@ -109,6 +109,25 @@ src/ops/linear/ternary/
 5. **三元码逐字节搬运**（row-split 三平面，group=128）；
 6. **globals / MTP / vision**：与源同族，按需借模板载荷。
 
+> ⚠️ **模板（`--template`）不只是"载荷来源"，它是骨架/清单。**
+> `pack.py` 会**遍历模板自己的对象名表**逐个映射；只有映射表**以外**的对象（`vision/*`、`mtp/*`、`frontend/*`、`text/draft_head*`）才走 `borrow`（源码里 `return None` 那一支）。
+> ⇒ **模板必须与目标制品同 schema**，即 **`identity.weights_id == "groupwise-int"`**。
+>
+> **同族的 `nvfp4` 制品用不了**：它把投影**融合**了 —— `gdn/a_b_projection`、`gdn/query_key_value_z`、`attention/query_key_gate_value` —— 这些名字不在映射表里，一进来就 `unmapped gdn object` 中止。
+>
+> **怎么产一份正确的模板**（基树自带两个转换器，**schema 由"跑哪一个"决定**）：
+> ```bash
+> # ✅ groupwise-int —— pack.py 要的这份
+> python3 -m tools.convert.qwen3_8_27b.convert \
+>   --model /path/to/Qwen3.8-27B \
+>   --dflash2-model /path/to/Qwen3.8-27B-DFlash2 \
+>   --out out/qwen3_8_27b.ninfer
+> # ❌ python3 -m tools.convert.qwen3_8_27b.convert_nvfp4 ...  → 产 nvfp4，schema 不匹配
+> ```
+> **自检（任一条满足即为正确）**：① `identity.weights_id == "groupwise-int"`；
+> ② `text/layers/3/` 下是 `attention/query_key` 与 `attention/gate_value` **两个**对象（若是单个 `attention/query_key_gate_value` ⇒ nvfp4，用不了）。
+> 详见 README「常见问题」。两个路径也可用 `--gguf` / `--template`（或环境变量 `NINFER_TERNARY_GGUF` / `NINFER_TERNARY_TEMPLATE`）覆盖，**不必再手改源码常量**。
+
 ---
 
 ## 4. 验证方法学（**本项目最值钱的部分**）
