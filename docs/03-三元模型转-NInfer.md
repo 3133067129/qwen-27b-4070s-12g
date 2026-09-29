@@ -206,7 +206,7 @@ python check_assembly.py      <art> <source.gguf>                 # 全量装配
 
 | # | 步骤 | 判据 |
 |---|---|---|
-| 1 | 环境自检 | 4080S / sm_89 / CUDA 13.3 |
+| 1 | 环境自检 | 4070S / sm_89 / CUDA 13.3 |
 | 2 | 读 GGUF 元数据 | `block_size=1024`、`Σsign_widths=28672`、`weight_names=401`、`inverse=[token_embd]` |
 | 3 | 打包 | `pack.py build <out>` → 尺寸/对象数符合 |
 | 4 | **验 artifact** | 4 脚本全绿（尤其 `check_assembly` 15/15）|

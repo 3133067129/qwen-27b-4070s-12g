@@ -87,7 +87,7 @@ python -m tools.artifact.inspect <OUT>.ninfer --objects
 
 ## 4. 本机实测（可复现的证据）
 
-本机在一张 **RTX 4080 SUPER / Windows / torch 2.12+cu130** 上转过一个 **27B 去审微调版**：
+本机在一张 **RTX 4070 SUPER / Windows / torch 2.12+cu130** 上转过一个 **27B 去审微调版**：
 
 | 项 | 值 |
 |---|---|
@@ -96,9 +96,9 @@ python -m tools.artifact.inspect <OUT>.ninfer --objects
 | 产物 | **18.21 GB**（1124 对象 / 1199 张量 / 18 分片）|
 | 格式分布 | BF16 ×582、FP32 ×96、**Q4G64 ×183**、**Q5G64 ×246**、Q6G64 ×1、W8G32 ×9 |
 | 布局 | `contiguous-le-v1` ×679、`row-split-k128-v1` ×439 |
-| 环境 | Windows-11 / RTX 4080 SUPER / CUDA 13.0 |
+| 环境 | Windows-11 / RTX 4070 SUPER / CUDA 13.0 |
 
-> 也就是说：**一张消费级 32 GB 卡在 Windows 上，两分钟级别就能把一个 27B 压成 `.ninfer`。**
+> 也就是说：**一张消费级 12 GB 卡在 Windows 上，两分钟级别就能把一个 27B 压成 `.ninfer`。**
 
 ---
 

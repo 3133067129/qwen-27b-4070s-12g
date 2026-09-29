@@ -13,7 +13,7 @@
 
 | 目录 | 内容 |
 |---|---|
-| `ninfer-4090w-ternary\**` | v1.0.8 线（我们的开发载体）的全部相关改动：**38 个文件** |
+| `ninfer-4070s-12g-ternary\**` | v1.0.8 线（我们的开发载体）的全部相关改动：**38 个文件** |
 | `ternary-pack\{pack.py, MAPPING.json}` | 打包器 + 权威映射规格（**含 `gdn_value_z` 头级置换修复**）|
 | `verify\*.py / *.cmd` | 本轮新增的验证脚本（见 §C）|
 | `verify\harness\{rot_test.cu, gemm_test.cu}` | 脱离 ninfer 构建树的 nvcc 测试台（编的是**引擎同一份真代码**）|

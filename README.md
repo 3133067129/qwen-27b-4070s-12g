@@ -17,7 +17,7 @@ tags:
 - bonsai
 - ada
 - sm-89
-- rtx-4080-super
+- rtx-4070-super
 - windows
 - quantization
 - hadamard
@@ -27,7 +27,7 @@ datasets: []
 metrics: []
 ---
 
-# NInfer on Ada · 三元 Bonsai 2 27B 实战移植（RTX 4080 SUPER / Windows）
+# NInfer on Ada · 三元 Bonsai 2 27B 实战移植（RTX 4070 SUPER / Windows）
 
 > ## ⚠️ 发布声明（请先读）
 >
@@ -40,11 +40,11 @@ metrics: []
 > | 🙏 **尊重原作** | 权重版权归 **PrismML 及其上游（Qwen 体系）** 所有，按其各自许可发布；我们只做引擎侧的适配与工具 |
 > | ⬇️ **权重怎么拿** | **请前往官方作者处下载**（PrismML / Qwen 官方渠道），并遵守其许可条款；拿到权重后，用本仓的文档与工具自行生成制品 |
 > | 📄 **许可** | 本仓代码为 **Apache License 2.0**（**不覆盖**权重）；权重许可亦不覆盖本仓代码。详见 [NOTICE.md](NOTICE.md) |
-> | 🧱 **基线（照这个来）** | **`Ambolio/ninfer-4090-windows` @ `6eb70a07`（`v1.0.8` 线，Ada / Windows / sm_89）** —— `patches/` 就是针对它写的。**不要用 v1.2.0 或其它线**（目录结构与格式注册表都不同）。获取与覆盖步骤见 [docs/01](docs/01-4080S-接入-NInfer.md) §2 |
+> | 🧱 **基线（照这个来）** | **`Ambolio/ninfer-4090-windows` @ `6eb70a07`（`v1.0.8` 线，Ada / Windows / sm_89）** —— `patches/` 就是针对它写的。**不要用 v1.2.0 或其它线**（目录结构与格式注册表都不同）。获取与覆盖步骤见 [docs/01](docs/01-4070S-接入-NInfer.md) §2 |
 
 ---
 
-> 把 **NInfer** 推理引擎接到 **消费级 Ada 卡（RTX 4080 SUPER, sm_89, Windows）**，
+> 把 **NInfer** 推理引擎接到 **消费级 Ada 卡（RTX 4070 SUPER, sm_89, Windows）**，
 > 并把 **Ternary Bonsai 2 27B**（1.58-bit 三元 + Hadamard 旋转基）移植进 NInfer 原生 `.ninfer`。
 > 本仓是**技术成品展示 + 可复现文档 + 工具链**，不是一份权重分发。
 
@@ -62,7 +62,7 @@ metrics: []
 | 20 题社区基准（MMLU/MMLU-Pro/ZebraLogic/AIME/HumanEval） | **19/20 = 95%**（同引擎全精度 27B 亦为 19/20，**打平**） |
 
 **它做了什么**：给 NInfer 加了一种它原本没有的权重格式（三元 + 运行时 Hadamard 旋转），
-把 **MTP 头拼进三元 artifact**（否则够不到 KPI），并让整条链在本机 32 GB 的 Ada 卡上跑通、达标。
+把 **MTP 头拼进三元 artifact**（否则够不到 KPI），并让整条链在本机 12 GB 的 Ada 卡上跑通、达标。
 **全社区此前没有第二家**把三元接进 NInfer。
 
 ---
@@ -96,7 +96,7 @@ README.md                      ← 本文（模型卡片）
 NOTICE.md                      ← 第三方来源与许可声明
 LICENSE                        ← Apache License 2.0
 docs/
-  01-4080S-接入-NInfer.md       ← 让 NInfer 在 Ada/Windows 上跑起来
+  01-4070S-接入-NInfer.md       ← 让 NInfer 在 Ada/Windows 上跑起来
   02-微调模型转-NInfer.md       ← 把普通（微调）模型转成 .ninfer
   03-三元模型转-NInfer.md       ← 把三元模型移植进 NInfer（本项目主线）
   04-工程实录-坑与方法学.md      ← 踩过的坑与验证方法学（最值钱的部分）
@@ -168,7 +168,7 @@ python3 tools/pack.py build <out.ninfer> --gguf <Bonsai.gguf> --template <groupw
 
 ## 三份技术文档（核心交付）
 
-### ① [4080S 接入 NInfer](docs/01-4080S-接入-NInfer.md)
+### ① [4070S 接入 NInfer](docs/01-4070S-接入-NInfer.md)
 消费级 Ada（sm_89）+ Windows 上把 NInfer 编出来、跑起来：环境、构建、运行、档位、坑。
 
 ### ② [微调模型 → .ninfer](docs/02-微调模型转-NInfer.md)

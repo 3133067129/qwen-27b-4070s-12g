@@ -1,0 +1,32 @@
+# Claude Code per-machine settings and backups.
+# These can contain plaintext API keys / auth tokens - never commit them.
+.claude/settings.local.json
+.claude/settings.local.json*
+.claude/settings.json.bak*
+.claude/settings.json
+
+# Local machine environment (never commit)
+_dl/
+build/
+cc_test/
+cc_test2/
+ninfer-4070s-12g/
+t.cpp
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Model weights & data (never commit)
+*.ninfer
+*.gguf
+models/Ternary-Bonsai-2-27B/
+models/Qwen3.8-27B/
+models/corpus*.txt
+models/bench/
+models/bench2/
+models/*.log
+models/*.err
+models/*.out
+*.jsonl
+models/*.json

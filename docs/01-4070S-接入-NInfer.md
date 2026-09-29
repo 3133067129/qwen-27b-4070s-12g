@@ -1,9 +1,9 @@
-# 01 · 把 NInfer 接入 RTX 4080 SUPER（Ada / sm_89 / Windows）
+# 01 · 把 NInfer 接入 RTX 4070 SUPER（Ada / sm_89 / Windows）
 
 > 目标：在一张**消费级 Ada 卡 + Windows** 上，从源码把 NInfer 编出来、跑起来，
 > 并能用命令行 / HTTP 服务两种方式与模型对话。
 >
-> 适用：RTX 4080 / 4080 SUPER / 4090（sm_89）；Windows + MSVC。Linux/Blackwell 走官方主线即可。
+> 适用：RTX 4070 SUPER / 4080 / 4090（sm_89）；Windows + MSVC。Linux/Blackwell 走官方主线即可。
 
 ---
 
@@ -21,7 +21,7 @@ NInfer 官方**只支持 Linux + RTX 5090（sm_120a）**，其 CMake **显式拒
 
 | 项 | 值 |
 |---|---|
-| GPU | NVIDIA GeForce RTX 4080 SUPER（AD103，**sm_89**，32,760 MiB）｜驱动 616.56 |
+| GPU | NVIDIA GeForce RTX 4070 SUPER（AD104，**sm_89**，12,288 MiB）｜驱动 616.56 |
 | 操作系统 | Windows 11 |
 | CUDA | **13.3.33**（**旁装**，不覆盖系统 CUDA；回退 = 删目录） |
 | 编译器 | MSVC **14.51.36231**（VS 18 BuildTools） |
@@ -97,7 +97,7 @@ cmake -S <NINFER_ROOT> -B <BUILD_ROOT> -G Ninja ^
 
 | 开关 | 值 | 原因 |
 |---|---|---|
-| `CMAKE_CUDA_ARCHITECTURES` | `89` | Ada（4080S/4090）|
+| `CMAKE_CUDA_ARCHITECTURES` | `89` | Ada（4070S/4090）|
 | `NINFER_DISABLE_MEDIA` | `ON` | 该树不带 ffmpeg 依赖 ⇒ **不支持图片/视觉**（会报 `Compiled without FFMPEG support.`）。要视觉只能用官方 1.2.0 生产引擎 |
 | `NINFER_BUILD_APPS` | `ON` | 产出 `ninfer.exe` / `ninfer-serve.exe` / `ninfer-perplexity.exe` |
 | `VSLANG=1033` | — | 否则 MSVC 输出**中文**，破坏 ninja 的 `/showIncludes` 依赖扫描（见 §6.1）|

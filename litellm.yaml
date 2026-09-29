@@ -1,0 +1,60 @@
+model_list:
+  # ---------------------------------------------------------------
+  # Local: Ollama (port 11434)
+  # ---------------------------------------------------------------
+  - model_name: local-qwen-27b
+    litellm_params:
+      model: ollama/lucloner/qwen38-27b-turbofcfusion:mtp-q4km
+      api_base: http://127.0.0.1:11434
+
+  - model_name: local-qwen3-coder-30b
+    litellm_params:
+      model: ollama/qwen3-coder:30b
+      api_base: http://127.0.0.1:11434
+
+  - model_name: local-deepseek-coder-16b
+    litellm_params:
+      model: ollama/deepseek-coder-v2:16b
+      api_base: http://127.0.0.1:11434
+
+  - model_name: local-qwen-coder-14b
+    litellm_params:
+      model: ollama/qwen2.5-coder:14b
+      api_base: http://127.0.0.1:11434
+
+  - model_name: local-qwen-coder-1.5b
+    litellm_params:
+      model: ollama/qwen2.5-coder:1.5b
+      api_base: http://127.0.0.1:11434
+
+  - model_name: local-gemma3-12b
+    litellm_params:
+      model: ollama/gemma3:12b
+      api_base: http://127.0.0.1:11434
+
+  # ---------------------------------------------------------------
+  # Local: NInfer engine (port 8099) - optional, only when NInfer is up
+  # ---------------------------------------------------------------
+  - model_name: ninfer-qwen-27b
+    litellm_params:
+      model: anthropic/qwen3.8-27b
+      api_key: sk-local
+      api_base: http://127.0.0.1:8099
+
+  # ---------------------------------------------------------------
+  # Cloud: DeepSeek - all read DEEPSEEK_API_KEY from the environment
+  # ---------------------------------------------------------------
+  - model_name: deepseek-cloud
+    litellm_params:
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+
+  - model_name: deepseek-v4-flash
+    litellm_params:
+      model: deepseek/deepseek-v4-flash
+      api_key: os.environ/DEEPSEEK_API_KEY
+
+  - model_name: deepseek-v4-pro
+    litellm_params:
+      model: deepseek/deepseek-v4-pro
+      api_key: os.environ/DEEPSEEK_API_KEY
