@@ -14,15 +14,16 @@ Usage: check_assembly.py <artifact.ninfer> <pq2.gguf>
 from __future__ import annotations
 
 import hashlib
+import os
 import sys
 from collections import Counter
 from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, r"<NINFER>\ninfer\src\ninfer-4090w-ternary")
-sys.path.insert(0, r"E:\ninfer\src\ninfer-4090w-ternary")
-sys.path.insert(0, r"<WORKSPACE>\tools")
+# The engine tree (base 6eb70a07 + patches/changed-files): set NINFER_ROOT, or put it on PYTHONPATH.
+if os.environ.get("NINFER_ROOT"):
+    sys.path.insert(0, os.environ["NINFER_ROOT"])
 from _ternary_ref import Gguf  # noqa: E402
 from tools.artifact import container  # noqa: E402
 

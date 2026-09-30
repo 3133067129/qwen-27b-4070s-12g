@@ -5,28 +5,26 @@
 .claude/settings.json.bak*
 .claude/settings.json
 
-# Local machine environment (never commit)
+# Local machine environment (never commit): engine tree, builds, and the local
+# launchers / client configs, which carry machine-specific absolute paths
 _dl/
 build/
 cc_test/
 cc_test2/
 ninfer-4070s-12g/
 t.cpp
+1.json
+litellm.yaml
+start-litellm.ps1
+.vscode/
 
 # Python cache
 __pycache__/
 *.pyc
 
-# Model weights & data (never commit)
+# Model weights, data and local run scripts (never commit)
+models/
 *.ninfer
 *.gguf
-models/Ternary-Bonsai-2-27B/
-models/Qwen3.8-27B/
-models/corpus*.txt
-models/bench/
-models/bench2/
-models/*.log
-models/*.err
-models/*.out
+*.safetensors
 *.jsonl
-models/*.json

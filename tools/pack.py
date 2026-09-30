@@ -21,10 +21,13 @@ Modes
   layer3 <out>     minimal artifact: frontend + sign table + one full-attention layer
   build  <out>     full text model
 
-Paths (both may be overridden; the constants in this file are only defaults)
+Paths (all may be overridden; the constants in this file are only placeholders)
   --gguf     <p>   the Bonsai 2 27B PQ2_0 GGUF          (env NINFER_TERNARY_GGUF)
   --template <p>   a **groupwise-int** qwen3.8-27b artifact
                    (env NINFER_TERNARY_TEMPLATE)       -- see README FAQ
+  --ninfer-root <p>  the engine source tree = base 6eb70a07 + patches/changed-files; its
+                   tools/artifact package registers PQ2_0_G128 / PTQ1_0_G128
+                   (env NINFER_ROOT; may be omitted when that tree is already on PYTHONPATH)
   The template is the skeleton/manifest this packer walks, not just a donor of the
   vision/MTP payloads: its object NAMES must match the mapping table, so the `nvfp4`
   packing (fused gdn/a_b_projection, gdn/query_key_value_z, attention/query_key_gate_value)
@@ -43,21 +46,13 @@ from pathlib import Path
 
 import numpy as np
 
-NINFER_ROOT = r"E:\ninfer\src\ninfer-4090w-ternary"
-if NINFER_ROOT not in sys.path:
-    sys.path.insert(0, NINFER_ROOT)
+# Bound by _import_ninfer() from the engine tree's `tools.artifact`.  The import is deferred
+# until main() has parsed the arguments, so the usage text prints even before the engine
+# tree is reachable, and a missing/unpatched tree fails with instructions, not a traceback.
+Artifact = ArtifactIdentity = ArtifactWriter = ResourceSpec = TensorSpec = None
+encode_direct = row_split_geometry = None
 
-from tools.artifact import (  # noqa: E402
-    Artifact,
-    ArtifactIdentity,
-    ArtifactWriter,
-    ResourceSpec,
-    TensorSpec,
-    encode_direct,
-    row_split_geometry,
-)
-
-TEMPLATE = r"E:\ninfer\models\qwen3_8_27b_abliterated.ninfer"
+TEMPLATE = r"<WORKSPACE>\qwen3_8_27b.ninfer"
 GGUF = r"<WORKSPACE>\Ternary-Bonsai-2-27B-PQ2_0.gguf"
 
 # The template must be the **groupwise-int** packing.  It is not merely a donor of the
@@ -97,6 +92,40 @@ _TEMPLATE_HELP = """\
 _SCHEMA_HINT = ("\n  hint: 模板 schema 不匹配。本脚本只认 weights_id=groupwise-int 的模板；"
                 "nvfp4 模板的融合命名（gdn/a_b_projection、gdn/query_key_value_z、"
                 "attention/query_key_gate_value）不在映射表里。见 README FAQ / --template。")
+
+_NINFER_HELP = """\
+找不到可用的引擎 Python 包 tools.artifact：{detail}
+
+pack.py 需要引擎源码树（基座 6eb70a07 + 覆盖本仓 patches/changed-files）里的 tools/artifact，
+其中注册了三元格式 PQ2_0_G128 / PTQ1_0_G128（补丁里的 tools/artifact/*.py）。
+  用 --ninfer-root <源码树根> 或环境变量 NINFER_ROOT 指定，或把该树加进 PYTHONPATH。
+  判据：<源码树根>/tools/artifact/numeric.py 里有 PQ2_0_G128。
+"""
+
+
+def _import_ninfer(root: str | None) -> None:
+    """Bind the tools.artifact names from --ninfer-root / NINFER_ROOT / PYTHONPATH."""
+    global Artifact, ArtifactIdentity, ArtifactWriter, ResourceSpec, TensorSpec
+    global encode_direct, row_split_geometry
+    if root:
+        if not Path(root, "tools", "artifact").is_dir():
+            raise SystemExit(_NINFER_HELP.format(detail=f"{root} 下没有 tools/artifact/"))
+        sys.path.insert(0, root)
+    try:
+        import tools.artifact as ta
+    except ModuleNotFoundError as e:
+        if e.name not in ("tools", "tools.artifact"):
+            raise                       # a dependency of the package (torch, ...), not the tree
+        raise SystemExit(_NINFER_HELP.format(detail=e)) from None
+    try:
+        ta.row_split_geometry("PQ2_0_G128", (128, 128))
+    except ValueError as e:
+        raise SystemExit(_NINFER_HELP.format(
+            detail=f"{e}（{Path(ta.__file__).parent} 是没打补丁的基座）")) from None
+    Artifact, ArtifactIdentity, ArtifactWriter = ta.Artifact, ta.ArtifactIdentity, ta.ArtifactWriter
+    ResourceSpec, TensorSpec = ta.ResourceSpec, ta.TensorSpec
+    encode_direct, row_split_geometry = ta.encode_direct, ta.row_split_geometry
+
 
 T_PQ2_0, T_PTQ1_0, T_F32, T_BF16 = 142, 143, 0, 30
 FMT = {T_PQ2_0: "PQ2_0_G128", T_PTQ1_0: "PTQ1_0_G128"}
@@ -428,24 +457,6 @@ SIGN_OBJECTS = (
     ("text/hadamard_signs", (28672,), "FP32"),
     ("text/hadamard_widths", (3,), "I32"),
 )
-
-
-def build_specs(p):
-    """Ordered specs for the NEW artifact.
-
-    Template objects keep their order, shapes and borrowed formats, but every produced
-    tensor takes its TARGET format; the two Hadamard sign-table objects are appended.
-    """
-    specs = []
-    for o in p.objects:
-        if o["kind"] == "tensor":
-            fmt, layout = p.target_format(o["name"])
-            specs.append(TensorSpec(o["name"], tuple(o["shape"]), fmt, layout))
-        else:
-            specs.append(ResourceSpec(o["name"], o["encoding"], o["bytes"]))
-    for name, shape, fmt in SIGN_OBJECTS:
-        specs.append(TensorSpec(name, shape, fmt, "contiguous-le-v1"))
-    return specs
 
 
 # ---------------------------------------------------------------------------
@@ -790,10 +801,12 @@ def mode_check(g: Gguf) -> int:
         # scale is a tight positive cluster (few distinct high bytes, all finite, none
         # negative), whereas a mis-placed read draws scale words from arbitrary positions and
         # looks like a uniform uint16 sample with many NaN/inf and negative values.
-        arr = np.frombuffer(src, dtype=np.uint8).reshape(-1, 34)
-        words = arr[:, 0:2].copy().view(np.uint16).reshape(-1)
+        # The scale word leads a 34-byte PQ2_0 block but trails a 28-byte PTQ1_0 block.
+        blk, s = (28, 26) if tt == T_PTQ1_0 else (34, 0)
+        arr = np.frombuffer(src, dtype=np.uint8).reshape(-1, blk)
+        words = arr[:, s:s + 2].copy().view(np.uint16).reshape(-1)
         hi_distinct = int(np.unique((words >> 8).astype(np.uint8)).size)
-        d = arr[:, 0:2].copy().view(np.float16).astype(np.float32).reshape(-1)
+        d = arr[:, s:s + 2].copy().view(np.float16).astype(np.float32).reshape(-1)
         fin = np.isfinite(d)
         n_nonfinite = int(np.sum(~fin))
         n_neg = int(np.sum(fin & (d < 0)))
@@ -927,9 +940,17 @@ def main() -> int:
     args = sys.argv[1:]
     tpl_opt, args = _pop_opt(args, "--template")
     gguf_opt, args = _pop_opt(args, "--gguf")
+    root_opt, args = _pop_opt(args, "--ninfer-root")
     TEMPLATE = tpl_opt or os.environ.get("NINFER_TERNARY_TEMPLATE") or TEMPLATE
     GGUF = gguf_opt or os.environ.get("NINFER_TERNARY_GGUF") or GGUF
     if not args:
+        print(__doc__)
+        return 2
+    if args[0] not in ("check", "layer3", "build"):
+        print(f"unknown mode {args[0]}")
+        return 2
+    if args[0] != "check" and len(args) < 2:
+        print(f"{args[0]}: missing <out> path\n")
         print(__doc__)
         return 2
     if not Path(TEMPLATE).exists():
@@ -943,15 +964,11 @@ def main() -> int:
             f"GGUF 不存在: {GGUF}\n"
             f"  用 --gguf <path> 或环境变量 NINFER_TERNARY_GGUF 指定。\n"
             f"  源码里的默认值是占位符 <WORKSPACE>，必须覆盖。")
+    _import_ninfer(root_opt or os.environ.get("NINFER_ROOT"))
     g = Gguf(GGUF)
     if args[0] == "check":
         return mode_check(g)
-    if args[0] == "layer3":
-        return mode_build(g, args[1], only_layer=3)
-    if args[0] == "build":
-        return mode_build(g, args[1])
-    print(f"unknown mode {args[0]}")
-    return 2
+    return mode_build(g, args[1], only_layer=3 if args[0] == "layer3" else None)
 
 
 if __name__ == "__main__":

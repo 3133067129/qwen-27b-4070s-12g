@@ -58,7 +58,7 @@ metrics: []
 | **单流速度（MTP K=2）** | ✅ **96.7 – 130.8 t/s**（4/5 真实负载 ≥ 101 t/s） |
 | 纯解码（T=1） | 62 – 64 t/s |
 | 预填充（prefill） | 356 – 439 tok/s |
-| 制品尺寸 | **7.74 GB**（文本部分 6.696 GiB，落在 5.5–7.2 GiB 红线内） |
+| 制品尺寸 | **7.74 GiB**（8.31 GB；文本部分 6.696 GiB，落在 5.5–7.2 GiB 红线内）；模板若带 DFlash2 草稿头，会多借入 `dflash2/*` 2.07 GiB（MTP 用不到） |
 | 20 题社区基准（MMLU/MMLU-Pro/ZebraLogic/AIME/HumanEval） | **19/20 = 95%**（同引擎全精度 27B 亦为 19/20，**打平**） |
 
 **它做了什么**：给 NInfer 加了一种它原本没有的权重格式（三元 + 运行时 Hadamard 旋转），
@@ -156,12 +156,13 @@ python3 -m tools.convert.qwen3_8_27b.convert \
 
 **从 2026-09-21 起 `pack.py` 会提前拦住并告诉你怎么做**：打开模板时先校验 `weights_id`，
 不匹配就直接报出上面这张对照表与转换命令，而不再等到 200 行后抛一个没有处置建议的 `unmapped ...`。
-两个路径都可以用参数覆盖，**不必再手改源码里的常量**：
+三个路径都可以用参数覆盖，**不必再手改源码里的常量**：
 
 ```bash
-python3 tools/pack.py check       --gguf <Bonsai.gguf> --template <groupwise-int.ninfer>
-python3 tools/pack.py build <out.ninfer> --gguf <Bonsai.gguf> --template <groupwise-int.ninfer>
-# 等价的环境变量：NINFER_TERNARY_GGUF / NINFER_TERNARY_TEMPLATE
+python3 tools/pack.py check       --gguf <Bonsai.gguf> --template <groupwise-int.ninfer> --ninfer-root <NINFER_ROOT>
+python3 tools/pack.py build <out.ninfer> --gguf <Bonsai.gguf> --template <groupwise-int.ninfer> --ninfer-root <NINFER_ROOT>
+# 等价的环境变量：NINFER_TERNARY_GGUF / NINFER_TERNARY_TEMPLATE / NINFER_ROOT
+# <NINFER_ROOT> = 覆盖过 patches/changed-files 的基座树：pack.py 要 import 其中 tools/artifact 的三元格式注册
 ```
 
 ---

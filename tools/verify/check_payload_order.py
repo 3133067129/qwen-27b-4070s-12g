@@ -16,11 +16,14 @@ Usage: check_payload_order.py <artifact.ninfer> <object-name-substring>
 """
 from __future__ import annotations
 
+import os
 import sys
 
 import numpy as np
 
-sys.path.insert(0, r"E:\ninfer\src\ninfer-4090w-ternary")
+# The engine tree (base 6eb70a07 + patches/changed-files): set NINFER_ROOT, or put it on PYTHONPATH.
+if os.environ.get("NINFER_ROOT"):
+    sys.path.insert(0, os.environ["NINFER_ROOT"])
 from tools.artifact import container  # noqa: E402
 
 

@@ -1,10 +1,12 @@
 """List selected ninfer artifact objects (ASCII source, path via argv).
 Usage: python list_objects.py <artifact.ninfer> <name-substring> [more substrings...]
 """
+import os
 import sys
 
-ROOT = r"E:\ninfer\src\ninfer-4090w-ternary"
-sys.path.insert(0, ROOT)
+# The engine tree (base 6eb70a07 + patches/changed-files): set NINFER_ROOT, or put it on PYTHONPATH.
+if os.environ.get("NINFER_ROOT"):
+    sys.path.insert(0, os.environ["NINFER_ROOT"])
 
 from tools.artifact import container  # noqa: E402
 

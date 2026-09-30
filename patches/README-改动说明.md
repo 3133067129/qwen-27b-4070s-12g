@@ -11,12 +11,12 @@
 
 ## A. 本包包含
 
-| 目录 | 内容 |
+| 目录（相对仓库根） | 内容 |
 |---|---|
-| `ninfer-4070s-12g-ternary\**` | v1.0.8 线（我们的开发载体）的全部相关改动：**38 个文件** |
-| `ternary-pack\{pack.py, MAPPING.json}` | 打包器 + 权威映射规格（**含 `gdn_value_z` 头级置换修复**）|
-| `verify\*.py / *.cmd` | 本轮新增的验证脚本（见 §C）|
-| `verify\harness\{rot_test.cu, gemm_test.cu}` | 脱离 ninfer 构建树的 nvcc 测试台（编的是**引擎同一份真代码**）|
+| `patches/changed-files/**` | v1.0.8 线（我们的开发载体）的全部相关改动：**42 个文件**（39 个 C++/CUDA/CMake + 3 个 `tools/artifact/*.py`）|
+| `tools/{pack.py, MAPPING.json}` | 打包器 + 权威映射规格（**含 `gdn_value_z` 头级置换修复**）|
+| `tools/verify/*.py / *.cmd` | 本轮新增的验证脚本（见 §C）|
+| `tools/verify/harness/{rot_test.cu, gemm_test.cu}` | 脱离 ninfer 构建树的 nvcc 测试台（编的是**引擎同一份真代码**）|
 
 ## B. 改动清单（本轮）
 
@@ -42,7 +42,8 @@
 | `src/targets/qwen3_6_27b/impl/variant.cpp` | 传工作区 + groupwise-int profile 预留旋转 scratch |
 | `src/targets/qwen3_6/impl/runtime/{text_context_impl,text_prefill_impl,program_impl,dflash_impl}.h` | LM head 改用带工作区的 `linear`（折叠后的 output_head 需要旋转 scratch）|
 | `src/CMakeLists.txt` | +2 源文件 |
-| `ternary-pack/pack.py` | **`gdn_value_z` 头级置换修复**（`perm_row`）|
+| `tools/artifact/{numeric,layouts,__init__}.py` | Python 侧格式注册：`TernaryFormat` + `PQ2_0_G128` / `PTQ1_0_G128`，`row-split-k128-v1` 几何支持三元。**`tools/pack.py` 与 verify 脚本依赖它**（此前漏在包外：覆盖基座后 `pack.py` 报 `unknown numeric format: 'PQ2_0_G128'`，现已补齐）|
+| `tools/pack.py`（本仓，不在 `changed-files/`） | **`gdn_value_z` 头级置换修复**（`perm_row`）|
 
 > 上一棒的改动（格式注册、三元解码、M5 拼头、绑定层、`embed_gather` 三元内核、`tensor.h` 的 `hadamard_*` 字段）
 > 也随这些文件一并包含（本包是**当前磁盘状态**，不是增量 diff）。
@@ -74,13 +75,16 @@
 | `verify\gemm_oracle.py` + `gemm_test.cu` | 解码+GEMM+旋转组合 vs 纯 numpy，rel_l2 2.8e-03 + 3 类负控 |
 | `verify\loadtest.cmd` / `gentest.cmd` | 可复现的装载 / 生成探针（写 `load-*.log` / `gen-*.log`）|
 
+> Python 脚本要 import 引擎的 `tools.artifact`：先设 `NINFER_ROOT=<覆盖过 changed-files 的基座树>`（或把它放进 `PYTHONPATH`）。
+
 ## D. 重建
 
 ```powershell
-# v1.0.8 线（b1 树）
-<BUILD_ROOT>\buildb1inc2.cmd          # 增量；日志 <BUILD_ROOT>\b1inc2.log
+# v1.0.8 线（b1 树）：脚本在本仓 tools\verify\，先把其中的 <BUILD_ROOT> / <CUDA13> 占位符换成你的路径
+tools\verify\buildb1inc2.cmd          # 增量；日志 <BUILD_ROOT>\b1inc2.log
 # 三元 artifact（改了 pack.py 之后必须重打，产物用新文件名）
-<PYTHON>\python.exe <WORKSPACE>\ternary-pack\pack.py build <out.ninfer>
+#   --ninfer-root = 覆盖过 changed-files 的基座树（也可用环境变量 NINFER_ROOT，或把它放进 PYTHONPATH）
+<PYTHON>\python.exe tools\pack.py build <out.ninfer> --gguf <Bonsai.gguf> --template <groupwise-int.ninfer> --ninfer-root <NINFER_ROOT>
 ```
 
 ## E. ⚠️ 三项必须做的验证（否则会踩同样的坑）

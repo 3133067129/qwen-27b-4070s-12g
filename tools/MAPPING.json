@@ -1,5 +1,5 @@
 {
-  "_doc": "Bonsai 2 27B GGUF (arch qwen35) -> ninfer artifact object mapping. Every rule below was established EMPIRICALLY against E:\\ninfer\\models\\qwen3_8_27b_abliterated.ninfer (same model family), except where marked INFERRED. Rotated (hadamard-folded) matrices cannot be correlated - only byte accounting applies to them.",
+  "_doc": "Bonsai 2 27B GGUF (arch qwen35) -> ninfer artifact object mapping. Every rule below was established EMPIRICALLY against a groupwise-int qwen3.8-27b artifact (same model family), except where marked INFERRED. Rotated (hadamard-folded) matrices cannot be correlated - only byte accounting applies to them.",
   "_verified_by": "probe_conventions.py, solve_gdn_order.py (see <WORKSPACE>\\ternary-pack\\)",
   "_layers": {
     "total": 64,

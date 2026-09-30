@@ -84,6 +84,7 @@ src/ops/linear/ternary/
 | `src/ops/wrapper/{embedding,attn_input_proj,gdn_input_proj,linear_swiglu,linear_add}.cpp` | 各 fused 家族的三元分支（**能组合就不写新 kernel**）|
 | `src/targets/qwen3_6_27b/impl/**` | 传工作区；LM head 用带工作区的 linear |
 | `src/CMakeLists.txt` | +ternary_rotation.cu/.cpp |
+| `tools/artifact/{numeric,layouts,__init__}.py` | Python 侧注册 `TernaryFormat` / `PQ2_0_G128` / `PTQ1_0_G128`，row-split 几何支持三元（`tools/pack.py` 与 verify 脚本都依赖它）|
 
 **不需要改**（实测结论）：`gdn_gating_proj`（a/b 是 BF16，非折叠）、`sparse_moe`（27B dense 不走）。
 ⚠️ 若目标是 **MoE** 模型，则 `sparse_moe` **必须**补三元 expert 内核（本项目未做）。
@@ -110,7 +111,7 @@ src/ops/linear/ternary/
 6. **globals / MTP / vision**：与源同族，按需借模板载荷。
 
 > ⚠️ **模板（`--template`）不只是"载荷来源"，它是骨架/清单。**
-> `pack.py` 会**遍历模板自己的对象名表**逐个映射；只有映射表**以外**的对象（`vision/*`、`mtp/*`、`frontend/*`、`text/draft_head*`）才走 `borrow`（源码里 `return None` 那一支）。
+> `pack.py` 会**遍历模板自己的对象名表**逐个映射；只有映射表**以外**的对象（`vision/*`、`mtp/*`、`frontend/*`、`text/draft_head*`，以及模板里若有的 `dflash2/*`）才走 `borrow`（源码里 `return None` 那一支）。
 > ⇒ **模板必须与目标制品同 schema**，即 **`identity.weights_id == "groupwise-int"`**。
 >
 > **同族的 `nvfp4` 制品用不了**：它把投影**融合**了 —— `gdn/a_b_projection`、`gdn/query_key_value_z`、`attention/query_key_gate_value` —— 这些名字不在映射表里，一进来就 `unmapped gdn object` 中止。
@@ -127,6 +128,7 @@ src/ops/linear/ternary/
 > **自检（任一条满足即为正确）**：① `identity.weights_id == "groupwise-int"`；
 > ② `text/layers/3/` 下是 `attention/query_key` 与 `attention/gate_value` **两个**对象（若是单个 `attention/query_key_gate_value` ⇒ nvfp4，用不了）。
 > 详见 README「常见问题」。两个路径也可用 `--gguf` / `--template`（或环境变量 `NINFER_TERNARY_GGUF` / `NINFER_TERNARY_TEMPLATE`）覆盖，**不必再手改源码常量**。
+> 引擎源码树用 `--ninfer-root`（或 `NINFER_ROOT` / `PYTHONPATH`）指定：必须是**覆盖过 `patches/changed-files`** 的基座树，`pack.py` 要 import 其中 `tools/artifact` 的三元格式注册。
 
 ---
 
@@ -157,6 +159,7 @@ v1 `6144 行 → 2080 distinct、4064 缺失、2048 重复`；v2 `6144/6144 全�
 ### 4.3 四个验证脚本（缺一不可）
 
 ```
+# 先设 NINFER_ROOT=<覆盖过 patches/changed-files 的基座树>（或放进 PYTHONPATH）：脚本要 import 其 tools.artifact
 python check_payload_order.py <art> 'text/layers/0/gdn/output'   # 是否 row-split 三平面（分布指纹）
 python check_signs.py         <art> <hadamard-meta.json>          # 符号表 vs 元数据逐值
 python check_row_order.py     <art> <source.gguf>                 # 行级指纹多重集
@@ -197,7 +200,7 @@ python check_assembly.py      <art> <source.gguf>                 # 全量装配
 | 纯解码（T=1） | **62–64 t/s** | 等效带宽 ~447 GB/s > llama.cpp 同卡 356 GB/s |
 | 单流（MTP K=2） | **96.7 – 130.8 t/s** | 4/5 负载 ≥101 |
 | prefill | **356–439 tok/s** | 追平并超过非三元 |
-| 制品 | 7.74 GB（文本 6.696 GiB）| 红线 5.5–7.2 GiB |
+| 制品 | 7.74 GiB（8.31 GB；文本 6.696 GiB）；模板带 DFlash2 时另借 `dflash2/*` 2.07 GiB | 红线 5.5–7.2 GiB（文本部分）|
 | 基准 | **19/20 = 95%** | 同引擎全精度 27B = 19/20（**打平**） |
 
 ---
