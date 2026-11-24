@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:\\Users\\Administrator\\.claude\\notify.js\" # claude-code-notifier"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:\\Users\\Administrator\\.claude\\notify.js\" # claude-code-notifier"
+          }
+        ]
+      }
+    ]
+  }
+}
